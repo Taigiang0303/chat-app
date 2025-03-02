@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api-gateway
+
+  auth-service:
+    build: ./services/auth
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./services/auth:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/auth
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=your_jwt_secret_key_here
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - db
+      - redis
+
+  chat-service:
+    build: ./services/chat
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./services/chat:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/chat
+      - REDIS_URL=redis://redis:6379/1
+      - NATS_URL=nats://nats:4222
+      - JWT_SECRET=your_jwt_secret_key_here
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - db
+      - redis
+      - nats
+
+  notification-service:
+    build: ./services/notification
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./services/notification:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/notification
+      - REDIS_URL=redis://redis:6379/2
+      - NATS_URL=nats://nats:4222
+      - JWT_SECRET=your_jwt_secret_key_here
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=http://localhost:3000
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+    depends_on:
+      - db
+      - redis
+      - nats
+      - mailhog
+
+  api-gateway:
+    image: traefik:v2.9
+    ports:
+      - "8000:80"
+      - "8080:8080"
+    volumes:
+      - ./infrastructure/traefik:/etc/traefik
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - auth-service
+      - chat-service
+      - notification-service
+
+  db:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_MULTIPLE_DATABASES=auth,chat,notification
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  nats:
+    image: nats:2-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: 
+      - "-js"
+      - "-m"
+      - "8222"
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  postgres_data:
+  redis_data: 

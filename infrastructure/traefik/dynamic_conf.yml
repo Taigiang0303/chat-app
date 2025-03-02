@@ -1,0 +1,63 @@
+http:
+  routers:
+    auth-router:
+      rule: "PathPrefix(`/api/auth`)"
+      service: auth-service
+      middlewares:
+        - strip-prefix-middleware
+
+    users-router:
+      rule: "PathPrefix(`/api/users`)"
+      service: auth-service
+      middlewares:
+        - strip-prefix-middleware
+
+    rooms-router:
+      rule: "PathPrefix(`/api/rooms`)"
+      service: chat-service
+      middlewares:
+        - strip-prefix-middleware
+
+    messages-router:
+      rule: "PathPrefix(`/api/messages`)"
+      service: chat-service
+      middlewares:
+        - strip-prefix-middleware
+
+    notifications-router:
+      rule: "PathPrefix(`/api/notifications`)"
+      service: notification-service
+      middlewares:
+        - strip-prefix-middleware
+
+    preferences-router:
+      rule: "PathPrefix(`/api/preferences`)"
+      service: notification-service
+      middlewares:
+        - strip-prefix-middleware
+
+    websocket-router:
+      rule: "PathPrefix(`/ws`)"
+      service: chat-service
+
+  services:
+    auth-service:
+      loadBalancer:
+        servers:
+          - url: "http://auth-service:8000"
+
+    chat-service:
+      loadBalancer:
+        servers:
+          - url: "http://chat-service:8000"
+
+    notification-service:
+      loadBalancer:
+        servers:
+          - url: "http://notification-service:8000"
+
+  middlewares:
+    strip-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/api" 
