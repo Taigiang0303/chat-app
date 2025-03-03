@@ -27,7 +27,7 @@ app.add_middleware(
 setup_exception_handlers(app)
 
 # Include routers
-app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(auth_router, tags=["auth"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 
 @app.get("/api/health", tags=["health"])

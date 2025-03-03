@@ -40,23 +40,6 @@ http:
       rule: "PathPrefix(`/ws`)"
       service: chat-service
 
-    # New health check routers
-    auth-health-router:
-      rule: "Path(`/api/health/auth`)"
-      service: auth-service-health
-
-    chat-health-router:
-      rule: "Path(`/api/health/chat`)"
-      service: chat-service-health
-
-    notification-health-router:
-      rule: "Path(`/api/health/notification`)"
-      service: notification-service-health
-
-    api-health-router:
-      rule: "Path(`/api/health`)"
-      service: api-health-service
-
   services:
     auth-service:
       loadBalancer:
@@ -72,27 +55,6 @@ http:
       loadBalancer:
         servers:
           - url: "http://notification-service:8000"
-
-    # New health check services
-    auth-service-health:
-      loadBalancer:
-        servers:
-          - url: "http://auth-service:8000/api/health"
-
-    chat-service-health:
-      loadBalancer:
-        servers:
-          - url: "http://chat-service:8000/api/health"
-
-    notification-service-health:
-      loadBalancer:
-        servers:
-          - url: "http://notification-service:8000/api/health"
-
-    api-health-service:
-      loadBalancer:
-        servers:
-          - url: "http://auth-service:8000/api/health"
 
   middlewares:
     strip-prefix-middleware:

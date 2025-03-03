@@ -1,6 +1,5 @@
 from typing import List, Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import validator, AnyHttpUrl
+from pydantic import BaseSettings, validator, AnyHttpUrl
 
 
 class Settings(BaseSettings):
@@ -8,13 +7,18 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
+    
+    @property
+    def DATABASE_URI(self) -> str:
+        """Alias for DATABASE_URL for backward compatibility"""
+        return self.DATABASE_URL
     
     # Redis
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6379/0"
     
     # JWT
-    JWT_SECRET: str
+    JWT_SECRET: str = "dev_secret_key_for_testing_only"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -33,11 +37,14 @@ class Settings(BaseSettings):
     # Security
     PASSWORD_HASH_ROUNDS: int = 12
     
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-    )
+    # Supabase
+    SUPABASE_URL: str = "https://mock.supabase.co"
+    SUPABASE_SERVICE_ROLE_KEY: str = "mock_key"
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
 
 
 settings = Settings() 

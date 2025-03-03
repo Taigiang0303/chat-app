@@ -47,6 +47,9 @@ export function Header() {
             <Link href="/about" className="transition-colors hover:text-foreground/80">
               About
             </Link>
+            <Link href="/test-cors" className="transition-colors hover:text-foreground/80 text-blue-500">
+              Test CORS
+            </Link>
           </nav>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">

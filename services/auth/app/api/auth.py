@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db import get_session
-from app.db.repositories import refresh_token_repository
+from app.db.repositories import RefreshTokenRepository
 from app.models.token import TokenResponse
 from app.models.user import User, UserCreate, UserWithToken
 from app.services.auth import (
@@ -16,7 +16,11 @@ from app.services.auth import (
     register_new_user,
 )
 
-router = APIRouter()
+# Create router with prefix to match API Gateway configuration
+router = APIRouter(prefix="/auth")
+
+# Create repository instances
+refresh_token_repository = RefreshTokenRepository()
 
 
 @router.post("/register", response_model=UserWithToken, status_code=status.HTTP_201_CREATED)

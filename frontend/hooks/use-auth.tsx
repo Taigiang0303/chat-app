@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { signInWithEmail, signUpWithEmail, signOut as supabaseSignOut, getUserProfile } from "@/lib/supabase-client";
 
 // Define user type
 export interface User {
@@ -48,7 +49,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Initialize auth state from localStorage on mount
   useEffect(() => {
-    const initializeAuth = async () => {
+    const initAuth = async () => {
+      setIsLoading(true);
       try {
         const storedToken = localStorage.getItem("token");
         const storedUser = localStorage.getItem("user");
@@ -56,17 +58,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (storedToken && storedUser) {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
-          
-          // Verify token is still valid
-          const isValid = await refreshToken();
-          if (!isValid) {
-            // Token is invalid, clear auth state
-            await logout();
-          }
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
-        // Clear potentially corrupted auth state
+        // Clear localStorage on error
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
@@ -75,33 +70,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    initializeAuth();
+    initAuth();
   }, []);
 
   // Login function
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Create form data for OAuth2 password flow
-      const formData = new URLSearchParams();
-      formData.append("username", email);
-      formData.append("password", password);
-      formData.append("grant_type", "password");
-
-      const response = await fetch(`${API_URL}/api/auth/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData.toString(),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Login failed");
-      }
-
-      const data = await response.json();
+      // Use the helper function from supabase-client.ts
+      const data = await signInWithEmail(email, password);
       
       // Store tokens
       localStorage.setItem("token", data.access_token);
@@ -109,17 +86,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setToken(data.access_token);
 
       // Fetch user profile
-      const userResponse = await fetch(`${API_URL}/api/users/me`, {
-        headers: {
-          Authorization: `Bearer ${data.access_token}`,
-        },
-      });
-
-      if (!userResponse.ok) {
-        throw new Error("Failed to fetch user profile");
-      }
-
-      const userData = await userResponse.json();
+      const userData = await getUserProfile(data.access_token);
       localStorage.setItem("user", JSON.stringify(userData));
       setUser(userData);
 
@@ -137,27 +104,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = async (email: string, displayName: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/auth/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          display_name: displayName,
-          password,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Registration failed");
-      }
-
-      const data = await response.json();
+      // Use the helper function from supabase-client.ts
+      const data = await signUpWithEmail(email, displayName, password);
       
       // Store token and user data
       localStorage.setItem("token", data.access_token);
+      localStorage.setItem("refreshToken", data.refresh_token);
       localStorage.setItem("user", JSON.stringify(data));
       setToken(data.access_token);
       setUser(data);
@@ -178,25 +130,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const refreshToken = localStorage.getItem("refreshToken");
       
       if (token && refreshToken) {
-        // Call logout API
-        await fetch(`${API_URL}/api/auth/logout`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
+        // Use the helper function from supabase-client.ts
+        await supabaseSignOut(refreshToken);
       }
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      // Clear auth state regardless of API success
+      // Clear local storage and state
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       setToken(null);
       setUser(null);
+      
+      // Redirect to login page
       router.push("/login");
     }
   };
@@ -204,24 +151,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Refresh token function
   const refreshToken = async (): Promise<boolean> => {
     try {
-      const refreshToken = localStorage.getItem("refreshToken");
+      const refreshTokenValue = localStorage.getItem("refreshToken");
       
-      if (!refreshToken) {
+      if (!refreshTokenValue) {
         return false;
       }
-
+      
       const response = await fetch(`${API_URL}/api/auth/refresh`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({
+          refresh_token: refreshTokenValue,
+        }),
       });
-
+      
       if (!response.ok) {
-        return false;
+        throw new Error("Failed to refresh token");
       }
-
+      
       const data = await response.json();
       
       // Update tokens
@@ -232,30 +181,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return true;
     } catch (error) {
       console.error("Token refresh error:", error);
+      // Clear auth state on refresh failure
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
+      setToken(null);
+      setUser(null);
+      
       return false;
     }
   };
 
-  // Create context value
-  const contextValue: AuthContextType = {
-    user,
-    token,
-    isLoading,
-    isAuthenticated,
-    login,
-    register,
-    logout,
-    refreshToken,
-  };
-
+  // Provide auth context
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isLoading,
+        isAuthenticated,
+        login,
+        register,
+        logout,
+        refreshToken,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Custom hook to use auth context
+// Hook to use auth context
 export function useAuth() {
   const context = useContext(AuthContext);
   

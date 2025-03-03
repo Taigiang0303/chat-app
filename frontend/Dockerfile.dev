@@ -6,11 +6,14 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
 RUN npm install -g pnpm && pnpm install
 
-# Copy source code
-COPY . .
+# Copy source code (excluding node_modules)
+COPY --chown=node:node . .
 
 # Expose port
 EXPOSE 3000
+
+# Switch to non-root user
+USER node
 
 # Start development server
 CMD ["pnpm", "dev"] 

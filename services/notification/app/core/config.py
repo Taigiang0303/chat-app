@@ -1,6 +1,5 @@
 from typing import List, Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import validator, AnyHttpUrl, EmailStr
+from pydantic import BaseSettings, validator, AnyHttpUrl, EmailStr
 
 
 class Settings(BaseSettings):
@@ -8,16 +7,16 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
     
     # Redis
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6379/2"
     
     # NATS
-    NATS_URL: str
+    NATS_URL: str = "nats://localhost:4222"
     
     # JWT
-    JWT_SECRET: str
+    JWT_SECRET: str = "dev_secret_key_for_testing_only"
     JWT_ALGORITHM: str = "HS256"
     
     # CORS
@@ -41,11 +40,10 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = "noreply@example.com"
     EMAIL_FROM_NAME: str = "Advanced Chat"
     
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-    )
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
 
 
 settings = Settings() 

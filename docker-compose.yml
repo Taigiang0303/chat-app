@@ -27,7 +27,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET=your_jwt_secret_key_here
       - ENVIRONMENT=development
-      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ORIGINS=["http://localhost:3000"]
     depends_on:
       - db
       - redis
@@ -44,7 +44,7 @@ services:
       - NATS_URL=nats://nats:4222
       - JWT_SECRET=your_jwt_secret_key_here
       - ENVIRONMENT=development
-      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ORIGINS=["http://localhost:3000"]
     depends_on:
       - db
       - redis
@@ -62,7 +62,7 @@ services:
       - NATS_URL=nats://nats:4222
       - JWT_SECRET=your_jwt_secret_key_here
       - ENVIRONMENT=development
-      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ORIGINS=["http://localhost:3000"]
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
     depends_on:

@@ -7,9 +7,6 @@ const nextConfig = {
     domains: ['avatars.githubusercontent.com', 'images.unsplash.com'],
     formats: ['image/avif', 'image/webp'],
   },
-  experimental: {
-    serverActions: true,
-  },
   async rewrites() {
     return [
       // API Gateway handles routing to specific services
