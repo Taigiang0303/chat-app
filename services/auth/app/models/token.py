@@ -27,8 +27,7 @@ class RefreshToken(BaseModel):
     token: str
     expires_at: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    revoked: bool = False
-    revoked_at: Optional[datetime] = None
+    is_revoked: bool = False
 
     class Config:
         orm_mode = True

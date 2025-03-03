@@ -13,6 +13,7 @@ from app.db import get_session
 from app.db.repositories import UserRepository, RefreshTokenRepository
 from app.models.token import TokenPayload
 from app.models.user import User, UserCreate, UserInDB
+from app.services.supabase_adapter import supabase_adapter
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -39,6 +40,27 @@ async def authenticate_user(
     db: AsyncSession, email: str, password: str
 ) -> Optional[User]:
     """Authenticate a user by email and password"""
+    try:
+        # First try to authenticate with Supabase
+        supabase_response = await supabase_adapter.sign_in(email, password)
+        
+        if supabase_response and supabase_response.user:
+            # Check if user exists in our database
+            user = await user_repository.get_by_email(db, email)
+            if not user:
+                # Create user in our database if it doesn't exist
+                user_data = UserCreate(
+                    email=email,
+                    display_name=supabase_response.user.user_metadata.get("display_name", email.split("@")[0]),
+                    password=password  # This will be hashed in the repository
+                )
+                user = await register_new_user(db, user_data)
+            return user
+    except Exception as e:
+        # If Supabase authentication fails, fall back to local authentication
+        print(f"Supabase authentication error: {str(e)}")
+        
+    # Fall back to local authentication
     user = await user_repository.get_by_email(db, email)
     if not user:
         return None
@@ -66,7 +88,7 @@ def create_access_token(
     }
     
     return jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
     )
 
 
@@ -85,12 +107,11 @@ def create_refresh_token(
         "sub": str(subject),
         "exp": expire,
         "iat": datetime.utcnow(),
-        "type": "refresh",
-        "jti": str(uuid4()),  # Unique token ID
+        "type": "refresh"
     }
     
     return jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
     )
 
 
@@ -107,7 +128,7 @@ async def get_current_user(
     
     try:
         payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
         token_data = TokenPayload(**payload)
         
@@ -139,21 +160,45 @@ async def register_new_user(
     db: AsyncSession, user_in: UserCreate
 ) -> User:
     """Register a new user"""
-    # Check if user with this email already exists
+    # Check if user already exists
     existing_user = await user_repository.get_by_email(db, user_in.email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
-    
-    # Create new user
+
+    # Try to register with Supabase first
+    try:
+        supabase_response = await supabase_adapter.sign_up(
+            user_in.email, user_in.password, user_in.display_name
+        )
+
+        # Log the response for debugging
+        print(f"Supabase registration response: {supabase_response}")
+
+        if not supabase_response or not hasattr(supabase_response, 'user'):
+            print(f"Supabase registration error: {supabase_response}")
+            # Continue with local registration if Supabase fails
+    except Exception as e:
+        print(f"Supabase registration exception: {str(e)}")
+        # Continue with local registration if Supabase fails
+
+    # Create user in local database
     hashed_password = get_password_hash(user_in.password)
-    user_data = user_in.dict()
-    user_data.pop("password")
-    user_data["hashed_password"] = hashed_password
+
+    # Create a new UserCreate model with the user data
+    user_in_db = UserInDB(
+        id=str(uuid4()),
+        email=user_in.email,
+        display_name=user_in.display_name,
+        hashed_password=hashed_password,
+        is_active=True
+    )
+
+    # Create user in database
+    user = await user_repository.create(db, obj_in=user_in_db)
     
-    user = await user_repository.create(db, obj_in=UserInDB(**user_data))
     return user
 
 
@@ -166,7 +211,7 @@ async def create_user_refresh_token(
     
     # Parse token to get expiration
     payload = jwt.decode(
-        refresh_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        refresh_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
     )
     expires_at = datetime.fromtimestamp(payload["exp"])
     
@@ -185,7 +230,7 @@ async def refresh_access_token(
     try:
         # Decode token
         payload = jwt.decode(
-            refresh_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            refresh_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
         
         # Validate token type
@@ -201,13 +246,15 @@ async def refresh_access_token(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
             )
         
         # Check if token is revoked
-        if token_in_db.revoked:
+        if token_in_db.is_revoked:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
             )
         
         # Check if token is expired

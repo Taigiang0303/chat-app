@@ -28,5 +28,4 @@ class RefreshToken(SQLModel, table=True):
     token: str = Field(unique=True, index=True)
     expires_at: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    revoked: bool = False
-    revoked_at: Optional[datetime] = None 
+    is_revoked: bool = False 

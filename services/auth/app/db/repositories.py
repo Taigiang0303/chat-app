@@ -52,8 +52,7 @@ class RefreshTokenRepository:
         results = await db.execute(statement)
         token = results.scalar_one_or_none()
         if token:
-            token.revoked = True
-            token.revoked_at = datetime.utcnow()
+            token.is_revoked = True
             db.add(token)
             await db.commit()
             await db.refresh(token)
@@ -63,12 +62,11 @@ class RefreshTokenRepository:
         """Revoke all refresh tokens for a user"""
         statement = select(RefreshToken).where(
             RefreshToken.user_id == user_id,
-            RefreshToken.revoked == False,
+            RefreshToken.is_revoked == False,
         )
         results = await db.execute(statement)
         tokens = results.scalars().all()
         for token in tokens:
-            token.revoked = True
-            token.revoked_at = datetime.utcnow()
+            token.is_revoked = True
             db.add(token)
         await db.commit() 
